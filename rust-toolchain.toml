@@ -1,4 +1,4 @@
 [toolchain]
-# If you update this, make sure to update the version used in ci.yml
+# Keep this in sync with the Dockerfile
 channel = "1.63"
 components = ["cargo", "clippy", "rustfmt"]
