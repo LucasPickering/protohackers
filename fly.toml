@@ -6,6 +6,9 @@ kill_timeout = 5
 processes = []
 
 [env]
+# protohackers is hosted in London
+PRIMARY_REGION = "lhr"
+RUST_LOG = "debug"
 
 [experimental]
 allowed_public_ports = []
