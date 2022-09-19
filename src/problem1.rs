@@ -1,4 +1,4 @@
-use crate::{util::socket_write, ProtoServer};
+use crate::{error::ServerResult, util::socket_write, ProtoServer};
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ pub struct PrimeTestServer;
 
 #[async_trait]
 impl ProtoServer for PrimeTestServer {
-    async fn run_server(&self, mut socket: TcpStream) -> anyhow::Result<()> {
+    async fn run_server(&mut self, mut socket: TcpStream) -> ServerResult<()> {
         // Split the stream into buffered reader+writer so we can do
         // line-delimited operations
         let (reader, mut writer) = socket.split();

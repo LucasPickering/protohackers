@@ -1,8 +1,15 @@
+mod error;
 mod problem0;
 mod problem1;
+mod problem2;
 mod util;
 
-use crate::{problem0::EchoServer, problem1::PrimeTestServer};
+use crate::{
+    error::{ServerError, ServerResult},
+    problem0::EchoServer,
+    problem1::PrimeTestServer,
+    problem2::PriceTrackingServer,
+};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use clap::Parser;
@@ -28,18 +35,19 @@ struct Args {
 }
 
 impl Args {
-    fn get_server(&self) -> anyhow::Result<Box<dyn ProtoServer>> {
+    fn get_server(&self) -> ServerResult<Box<dyn ProtoServer>> {
         match self.problem {
             0 => Ok(Box::new(EchoServer)),
             1 => Ok(Box::new(PrimeTestServer)),
-            problem => Err(anyhow!("Unknown problem: {}", problem)),
+            2 => Ok(Box::new(PriceTrackingServer::new()?)),
+            problem => Err(anyhow!("Unknown problem: {}", problem).into()),
         }
     }
 }
 
 #[async_trait]
-trait ProtoServer: Send + Sync {
-    async fn run_server(&self, socket: TcpStream) -> anyhow::Result<()>;
+trait ProtoServer: Send {
+    async fn run_server(&mut self, socket: TcpStream) -> ServerResult<()>;
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -54,14 +62,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let (socket, client) = listener.accept().await?;
         // We need create a new logical handler for each socket, based on the
-        // problem input argument from the user. This should be super cheap.
-        let server = args.get_server()?;
+        // problem input argument from the user. This should only allocate
+        // what's needed on a per-session basis.
+        let mut server = args.get_server()?;
         info!("{} Connected", client);
 
         tokio::spawn(async move {
-            if let Err(e) = server.run_server(socket).await {
-                if e.to_string() != "Socket closed" {
-                    error!("{} Error running server: {}", client, e);
+            match server.run_server(socket).await {
+                // Ignore SocketClose because it's a normal error
+                Ok(()) | Err(ServerError::SocketClose) => {}
+                Err(error) => {
+                    error!("{} Error running server: {:?}", client, error);
                 }
             }
             info!("{} Disconnected", client);

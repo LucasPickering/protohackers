@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Context};
+use crate::error::{ServerError, ServerResult};
+use anyhow::Context;
 use log::debug;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -6,13 +7,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub async fn socket_read(
     mut socket: impl AsyncReadExt + Unpin,
     buffer: &mut [u8],
-) -> anyhow::Result<&[u8]> {
+) -> ServerResult<&[u8]> {
     let bytes_read = socket
         .read(buffer)
         .await
         .context("Error reading from socket")?;
     if bytes_read == 0 {
-        Err(anyhow!("Socket closed"))
+        Err(ServerError::SocketClose)
     } else {
         let received = &buffer[0..bytes_read];
         debug!("<= {:?}", String::from_utf8_lossy(received));
@@ -24,10 +25,10 @@ pub async fn socket_read(
 pub async fn socket_write(
     mut socket: impl AsyncWriteExt + Unpin,
     bytes: &[u8],
-) -> anyhow::Result<()> {
+) -> ServerResult<()> {
     debug!("=> {:?}", String::from_utf8_lossy(bytes));
-    socket
+    Ok(socket
         .write_all(bytes)
         .await
-        .context("Error writing to socket")
+        .context("Error writing to socket")?)
 }

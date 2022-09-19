@@ -3,10 +3,11 @@ version: "3"
 services:
   api:
     build: ./
-    command: cargo run -- --host 0.0.0.0 --port 9001 1
+    command: cargo run -- --host 0.0.0.0 --port 9001 2
     init: true # Fixes slow shutdown
     tty: true # Colors!
     environment:
-      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+      - RUST_LOG
     ports:
       - "9001:9001"
