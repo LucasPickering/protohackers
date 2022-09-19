@@ -4,8 +4,4 @@ My solutions for [Protohackers](https://protohackers.com/). All solutions are wr
 
 ## Deployment
 
-Deployed through [fly.io](https://fly.io/). To deploy a new version:
-
-```sh
-flyctl deploy
-```
+Deployed locally via Docker Compose.
