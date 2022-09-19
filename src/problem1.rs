@@ -1,15 +1,19 @@
 use crate::ProtoServer;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, BufReader};
-use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::TcpStream,
+};
 
 const IS_PRIME_METHOD: &str = "isPrime";
 
 #[derive(Clone, Debug, Deserialize)]
 struct InputMessage {
     method: String,
-    number: i32,
+    /// Input numbers can be negative or decimal, even though those can't
+    /// possibly be prime
+    number: f64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -41,48 +45,63 @@ pub struct PrimeTestServer;
 #[async_trait]
 impl ProtoServer for PrimeTestServer {
     async fn run_server(&self, mut socket: TcpStream) -> anyhow::Result<()> {
-        let mut buf = [0; 32000];
+        // TODO comment
+        // TODO use util funcs to log stuff
+        // Split the stream into buffered reader+writer so we can do
+        // line-delimited operations
+        let (reader, mut writer) = socket.split();
+        let reader = BufReader::new(reader);
+        let mut lines = reader.lines();
 
-        loop {
-            let input_bytes = self.read(&mut socket, &mut buf).await?;
-            let reader = BufReader::new(input_bytes);
-            let mut output_bytes = Vec::new();
+        while let Some(line) = lines.next_line().await? {
+            let input_message_result =
+                serde_json::from_str::<InputMessage>(&line);
+            let output_message = match input_message_result {
+                Ok(input_message)
+                    if input_message.method != IS_PRIME_METHOD =>
+                {
+                    OutputMessage::malformed()
+                }
+                Ok(input_message) => {
+                    OutputMessage::new(is_prime(input_message.number))
+                }
+                Err(_) => OutputMessage::malformed(),
+            };
 
-            for line in reader.lines() {
-                let line = line?;
-                let input_message_result =
-                    serde_json::from_str::<InputMessage>(&line);
-                let output_message = match input_message_result {
-                    Ok(input_message)
-                        if input_message.method != IS_PRIME_METHOD =>
-                    {
-                        OutputMessage::malformed()
-                    }
-                    Ok(input_message) => {
-                        OutputMessage::new(is_prime(input_message.number))
-                    }
-                    Err(_) => OutputMessage::malformed(),
-                };
-                output_bytes.extend(serde_json::to_vec(&output_message)?);
-                output_bytes.push(b'\n');
-            }
-
-            self.write(&mut socket, &output_bytes).await?;
+            let mut output_bytes = serde_json::to_vec(&output_message)?;
+            output_bytes.push(b'\n');
+            writer.write_all(&output_bytes).await?;
         }
+
+        Ok(())
     }
 }
 
-fn is_prime(n: i32) -> bool {
-    // Out-of-bounds check
-    if n <= 1 {
+/// Check if an input number is prime. Any non-natural number is automatically
+/// not prime.
+fn is_prime(n_float: f64) -> bool {
+    if n_float != n_float.round() {
+        return false;
+    }
+
+    // Now we know n is an integer, so we can convert it
+    let n_int = n_float as i64;
+
+    // Check if it's positive by converting to u64
+    let n_int = match u64::try_from(n_int) {
+        Ok(n) => n,
+        Err(_) => return false,
+    };
+
+    // 0 and 1 aren't prime
+    if n_int <= 1 {
         return false;
     }
 
     // Now we know it's positive, do a simple primality check
-    let n = n as u32;
-    let max_test_num = (n as f32).sqrt() as u32;
+    let max_test_num = n_float.sqrt() as u64;
     for i in 2..=max_test_num {
-        if n % i == 0 {
+        if n_int % i == 0 {
             return false;
         }
     }
