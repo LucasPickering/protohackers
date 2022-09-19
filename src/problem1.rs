@@ -1,8 +1,9 @@
-use crate::ProtoServer;
+use crate::{util::socket_write, ProtoServer};
 use async_trait::async_trait;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, BufReader},
     net::TcpStream,
 };
 
@@ -45,15 +46,15 @@ pub struct PrimeTestServer;
 #[async_trait]
 impl ProtoServer for PrimeTestServer {
     async fn run_server(&self, mut socket: TcpStream) -> anyhow::Result<()> {
-        // TODO comment
-        // TODO use util funcs to log stuff
         // Split the stream into buffered reader+writer so we can do
         // line-delimited operations
         let (reader, mut writer) = socket.split();
         let reader = BufReader::new(reader);
         let mut lines = reader.lines();
 
+        // Read each line from the socket, process it, and send the response
         while let Some(line) = lines.next_line().await? {
+            debug!("<= {:?}", line);
             let input_message_result =
                 serde_json::from_str::<InputMessage>(&line);
             let output_message = match input_message_result {
@@ -68,9 +69,10 @@ impl ProtoServer for PrimeTestServer {
                 Err(_) => OutputMessage::malformed(),
             };
 
+            // Write the output. Make sure to include the newline
             let mut output_bytes = serde_json::to_vec(&output_message)?;
             output_bytes.push(b'\n');
-            writer.write_all(&output_bytes).await?;
+            socket_write(&mut writer, &output_bytes).await?;
         }
 
         Ok(())

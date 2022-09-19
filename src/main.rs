@@ -1,16 +1,14 @@
 mod problem0;
 mod problem1;
+mod util;
 
 use crate::{problem0::EchoServer, problem1::PrimeTestServer};
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use clap::Parser;
 use env_logger::{Env, Target};
-use log::{debug, error, info};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-};
+use log::{error, info};
+use tokio::net::{TcpListener, TcpStream};
 
 /// TCP server for Protohackers
 #[derive(Parser, Debug)]
@@ -42,44 +40,6 @@ impl Args {
 #[async_trait]
 trait ProtoServer: Send + Sync {
     async fn run_server(&self, socket: TcpStream) -> anyhow::Result<()>;
-
-    async fn read<'a>(
-        &self,
-        socket: &mut TcpStream,
-        buffer: &'a mut [u8],
-    ) -> anyhow::Result<&'a [u8]> {
-        let bytes_read = socket
-            .read(buffer)
-            .await
-            .context("Error reading from socket")?;
-        if bytes_read == 0 {
-            Err(anyhow!("Socket closed"))
-        } else {
-            let received = &buffer[0..bytes_read];
-            debug!(
-                "{} Receive: {:?}",
-                socket.peer_addr()?,
-                String::from_utf8_lossy(received)
-            );
-            Ok(received)
-        }
-    }
-
-    async fn write(
-        &self,
-        socket: &mut TcpStream,
-        bytes: &[u8],
-    ) -> anyhow::Result<()> {
-        debug!(
-            "{} Send: {:?}",
-            socket.peer_addr()?,
-            String::from_utf8_lossy(bytes)
-        );
-        socket
-            .write_all(bytes)
-            .await
-            .context("Error writing to socket")
-    }
 }
 
 #[tokio::main(flavor = "current_thread")]
