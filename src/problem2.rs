@@ -10,11 +10,45 @@ use tokio::{
 };
 
 #[derive(Debug)]
-pub struct PriceTrackingServer {
+pub struct PriceTrackingServer;
+
+#[async_trait]
+impl ProtoServer for PriceTrackingServer {
+    async fn handle_client(&self, mut socket: TcpStream) -> ServerResult<()> {
+        let (reader, mut writer) = socket.split();
+        let mut reader = BufReader::new(reader);
+        let mut db = PriceDatabase::new()?;
+
+        loop {
+            // Read message according to the 9-byte format. First byte is the
+            // action, next 4 are the first int32, last 4 are the second int32
+            let action = reader.read_u8().await? as char;
+            let i1 = reader.read_i32().await?;
+            let i2 = reader.read_i32().await?;
+            debug!("<= {} {} {}", action, i1, i2);
+
+            // RUn either query or insert
+            match action {
+                'Q' => {
+                    // Args are [start, end] of query timestamp range
+                    let mean = db.query(i1, i2)?;
+                    info!("Q [{}, {}] => {}", i1, i2, mean);
+                    socket_write(&mut writer, &mean.to_be_bytes()).await?;
+                }
+                // Args are (timestamp, price)
+                'I' => db.insert(i1, i2)?,
+                c => return Err(anyhow!("Invalid action: '{}'", c).into()),
+            };
+        }
+    }
+}
+
+/// Minimal sqlite DB to trace prices within a single client session
+struct PriceDatabase {
     connection: Connection,
 }
 
-impl PriceTrackingServer {
+impl PriceDatabase {
     pub fn new() -> anyhow::Result<Self> {
         let connection = Connection::open_in_memory()?;
         connection.execute(
@@ -58,35 +92,5 @@ impl PriceTrackingServer {
             (timestamp, price),
         )?;
         Ok(())
-    }
-}
-
-#[async_trait]
-impl ProtoServer for PriceTrackingServer {
-    async fn run_server(&mut self, mut socket: TcpStream) -> ServerResult<()> {
-        let (reader, mut writer) = socket.split();
-        let mut reader = BufReader::new(reader);
-
-        loop {
-            // Read message according to the 9-byte format. First byte is the
-            // action, next 4 are the first int32, last 4 are the second int32
-            let action = reader.read_u8().await? as char;
-            let i1 = reader.read_i32().await?;
-            let i2 = reader.read_i32().await?;
-            debug!("<= {} {} {}", action, i1, i2);
-
-            // RUn either query or insert
-            match action {
-                'Q' => {
-                    // Args are [start, end] of query timestamp range
-                    let mean = self.query(i1, i2)?;
-                    info!("Q [{}, {}] => {}", i1, i2, mean);
-                    socket_write(&mut writer, &mean.to_be_bytes()).await?;
-                }
-                // Args are (timestamp, price)
-                'I' => self.insert(i1, i2)?,
-                c => return Err(anyhow!("Invalid action: '{}'", c).into()),
-            };
-        }
     }
 }

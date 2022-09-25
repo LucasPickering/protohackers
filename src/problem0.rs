@@ -12,7 +12,7 @@ pub struct EchoServer;
 
 #[async_trait]
 impl ProtoServer for EchoServer {
-    async fn run_server(&mut self, mut socket: TcpStream) -> ServerResult<()> {
+    async fn handle_client(&self, mut socket: TcpStream) -> ServerResult<()> {
         let mut buf = [0; 1024];
 
         // In a loop, read data from the socket and write the data back

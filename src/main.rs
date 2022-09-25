@@ -15,6 +15,7 @@ use async_trait::async_trait;
 use clap::Parser;
 use env_logger::{Env, Target};
 use log::{error, info};
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
 /// TCP server for Protohackers
@@ -39,15 +40,22 @@ impl Args {
         match self.problem {
             0 => Ok(Box::new(EchoServer)),
             1 => Ok(Box::new(PrimeTestServer)),
-            2 => Ok(Box::new(PriceTrackingServer::new()?)),
+            2 => Ok(Box::new(PriceTrackingServer)),
             problem => Err(anyhow!("Unknown problem: {}", problem).into()),
         }
     }
 }
 
+/// An implementation of a Protohackers server. There will be one implementation
+/// per problem. It's important that is both `Send` and `Sync`, because a single
+/// instance of this trait is going to be instantiated per _program_ session.
+/// That means each client that connects is going to run on the same server
+/// instance. If you need mutability within your server, you'll need to
+/// implement internal mutability within the server. This is necessary because
+/// there could be multiple clients connected simultaneously.
 #[async_trait]
-trait ProtoServer: Send {
-    async fn run_server(&mut self, socket: TcpStream) -> ServerResult<()>;
+trait ProtoServer: Send + Sync {
+    async fn handle_client(&self, socket: TcpStream) -> ServerResult<()>;
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -56,19 +64,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .target(Target::Stdout)
         .init();
     let args = Args::parse();
+    // This needs an Arc so we can pass 'static copies into each handler task
+    let server = Arc::new(args.get_server()?);
     let listener = TcpListener::bind((args.host.as_str(), args.port)).await?;
     info!("Listening on {}:{}", args.host, args.port);
 
     loop {
         let (socket, client) = listener.accept().await?;
-        // We need create a new logical handler for each socket, based on the
-        // problem input argument from the user. This should only allocate
-        // what's needed on a per-session basis.
-        let mut server = args.get_server()?;
+
         info!("{} Connected", client);
 
+        let server = Arc::clone(&server);
         tokio::spawn(async move {
-            match server.run_server(socket).await {
+            match server.handle_client(socket).await {
                 // Ignore SocketClose because it's a normal error
                 Ok(()) | Err(ServerError::SocketClose) => {}
                 Err(error) => {

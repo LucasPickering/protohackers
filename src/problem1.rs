@@ -45,7 +45,7 @@ pub struct PrimeTestServer;
 
 #[async_trait]
 impl ProtoServer for PrimeTestServer {
-    async fn run_server(&mut self, mut socket: TcpStream) -> ServerResult<()> {
+    async fn handle_client(&self, mut socket: TcpStream) -> ServerResult<()> {
         // Split the stream into buffered reader+writer so we can do
         // line-delimited operations
         let (reader, mut writer) = socket.split();
