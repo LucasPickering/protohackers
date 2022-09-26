@@ -2,6 +2,7 @@ mod error;
 mod problem0;
 mod problem1;
 mod problem2;
+mod problem3;
 mod util;
 
 use crate::{
@@ -9,6 +10,7 @@ use crate::{
     problem0::EchoServer,
     problem1::PrimeTestServer,
     problem2::PriceTrackingServer,
+    problem3::ChatServer,
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -36,11 +38,12 @@ struct Args {
 }
 
 impl Args {
-    fn get_server(&self) -> ServerResult<Box<dyn ProtoServer>> {
+    fn get_server(&self) -> ServerResult<Arc<dyn ProtoServer>> {
         match self.problem {
-            0 => Ok(Box::new(EchoServer)),
-            1 => Ok(Box::new(PrimeTestServer)),
-            2 => Ok(Box::new(PriceTrackingServer)),
+            0 => Ok(Arc::new(EchoServer)),
+            1 => Ok(Arc::new(PrimeTestServer)),
+            2 => Ok(Arc::new(PriceTrackingServer)),
+            3 => Ok(Arc::new(ChatServer::new())),
             problem => Err(anyhow!("Unknown problem: {}", problem).into()),
         }
     }
@@ -65,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
     let args = Args::parse();
     // This needs an Arc so we can pass 'static copies into each handler task
-    let server = Arc::new(args.get_server()?);
+    let server = args.get_server()?;
     let listener = TcpListener::bind((args.host.as_str(), args.port)).await?;
     info!("Listening on {}:{}", args.host, args.port);
 
