@@ -5,6 +5,7 @@ mod util;
 use crate::problems::ProtoServer;
 use clap::Parser;
 use env_logger::{Env, Target};
+use log::info;
 
 /// Network server for solving Protohackers problems
 #[derive(Parser, Debug)]
@@ -31,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
     let server = ProtoServer::new(args.problem)?;
+    info!("Running problem #{}", args.problem);
     server.run(&args.host, args.port).await?;
     Ok(())
 }

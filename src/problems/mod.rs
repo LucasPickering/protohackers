@@ -2,19 +2,21 @@ mod problem0;
 mod problem1;
 mod problem2;
 mod problem3;
+mod problem4;
 
 use crate::{
     error::{ServerError, ServerResult},
     problems::{
         problem0::EchoServer, problem1::PrimeTestServer,
         problem2::PriceTrackingServer, problem3::ChatServer,
+        problem4::UnusualDatabaseServer,
     },
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
 use log::{error, info};
-use std::{fmt::Debug, sync::Arc};
-use tokio::net::{TcpListener, TcpStream};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc};
+use tokio::net::{TcpListener, TcpStream, UdpSocket};
 
 /// A solution for a single Protohackers problem. There are different
 /// categories of servers, based on the type of traffic they handle. Each
@@ -30,6 +32,7 @@ use tokio::net::{TcpListener, TcpStream};
 #[derive(Debug)]
 pub enum ProtoServer {
     Tcp(Arc<dyn TcpServer>),
+    Udp(Arc<dyn UdpServer>),
 }
 
 impl ProtoServer {
@@ -40,6 +43,7 @@ impl ProtoServer {
             1 => Ok(Self::Tcp(Arc::new(PrimeTestServer))),
             2 => Ok(Self::Tcp(Arc::new(PriceTrackingServer))),
             3 => Ok(Self::Tcp(Arc::new(ChatServer::new()))),
+            4 => Ok(Self::Udp(Arc::new(UnusualDatabaseServer::new()))),
             problem => Err(anyhow!("Unknown problem: {}", problem).into()),
         }
     }
@@ -47,6 +51,7 @@ impl ProtoServer {
     pub async fn run(self, host: &str, port: u16) -> ServerResult<()> {
         match self {
             Self::Tcp(server) => run_tcp(server, host, port).await,
+            Self::Udp(server) => run_udp(server, host, port).await,
         }
     }
 }
@@ -56,18 +61,20 @@ impl ProtoServer {
 /// handle the business logic.
 #[async_trait]
 pub trait TcpServer: Debug + Send + Sync {
+    /// Called when a client first connects. The server can freely send and
+    /// receive data with the client.
     async fn handle_client(&self, socket: TcpStream) -> ServerResult<()>;
 }
 
 /// Run a TCP server. This will start a loop that listens for a new client,
-/// then spawns an async task to handle that client
+/// then spawns an async task to handle that client.
 async fn run_tcp(
     server: Arc<dyn TcpServer>,
     host: &str,
     port: u16,
 ) -> ServerResult<()> {
     let listener = TcpListener::bind((host, port)).await?;
-    info!("Listening on {}:{}", host, port);
+    info!("Listening on {}:{} (TCP)", host, port);
 
     loop {
         let (socket, client) = listener.accept().await?;
@@ -85,6 +92,51 @@ async fn run_tcp(
                 }
             }
             info!("{} Disconnected", client);
+        });
+    }
+}
+
+/// A solution server for a UDP-based problem.
+#[async_trait]
+pub trait UdpServer: Debug + Send + Sync {
+    /// Called whenever the server receives data from a client. The server can
+    /// then freely handle the data and transmit back as necessary.
+    async fn handle_data(
+        &self,
+        socket: &UdpSocket,
+        data: &[u8],
+        sender: &SocketAddr,
+    ) -> ServerResult<()>;
+}
+
+/// Run a UDP server. This will listen for data from any client, then forward
+/// it to the server to be handled. This does *not* listen for connections,
+/// just messages. It is running in a [one-to-many format](https://docs.rs/tokio/1.21.2/tokio/net/struct.UdpSocket.html#example-one-to-many-bind).
+async fn run_udp(
+    server: Arc<dyn UdpServer>,
+    host: &str,
+    port: u16,
+) -> ServerResult<()> {
+    let socket = Arc::new(UdpSocket::bind((host, port)).await?);
+    info!("Listening on {}:{} (UDP)", host, port);
+
+    let mut buf = [0; 1024];
+    loop {
+        let (len, sender) = socket.recv_from(&mut buf).await?;
+        info!("{} Received {} bytes", sender, len);
+
+        // Clone the references so we can pass them into the task
+        let socket = Arc::clone(&socket);
+        let server = Arc::clone(&server);
+        tokio::spawn(async move {
+            match server.handle_data(&socket, &buf[0..len], &sender).await {
+                // Ignore SocketClose because it's a normal error
+                Ok(()) | Err(ServerError::SocketClose) => {}
+                Err(error) => {
+                    error!("{} Error running server: {:?}", sender, error);
+                }
+            }
+            info!("{} Disconnected", sender);
         });
     }
 }

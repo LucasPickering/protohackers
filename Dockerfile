@@ -6,3 +6,4 @@ COPY rust-toolchain.toml .
 # Force rustup to install the toolchain
 RUN rustup show
 COPY . .
+ENTRYPOINT ["cargo", "run", "--"]
