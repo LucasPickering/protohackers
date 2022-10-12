@@ -1,26 +1,12 @@
 mod error;
-mod problem0;
-mod problem1;
-mod problem2;
-mod problem3;
+mod problems;
 mod util;
 
-use crate::{
-    error::{ServerError, ServerResult},
-    problem0::EchoServer,
-    problem1::PrimeTestServer,
-    problem2::PriceTrackingServer,
-    problem3::ChatServer,
-};
-use anyhow::anyhow;
-use async_trait::async_trait;
+use crate::problems::ProtoServer;
 use clap::Parser;
 use env_logger::{Env, Target};
-use log::{error, info};
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
 
-/// TCP server for Protohackers
+/// Network server for solving Protohackers problems
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -37,56 +23,14 @@ struct Args {
     port: u16,
 }
 
-impl Args {
-    fn get_server(&self) -> ServerResult<Arc<dyn ProtoServer>> {
-        match self.problem {
-            0 => Ok(Arc::new(EchoServer)),
-            1 => Ok(Arc::new(PrimeTestServer)),
-            2 => Ok(Arc::new(PriceTrackingServer)),
-            3 => Ok(Arc::new(ChatServer::new())),
-            problem => Err(anyhow!("Unknown problem: {}", problem).into()),
-        }
-    }
-}
-
-/// An implementation of a Protohackers server. There will be one implementation
-/// per problem. It's important that is both `Send` and `Sync`, because a single
-/// instance of this trait is going to be instantiated per _program_ session.
-/// That means each client that connects is going to run on the same server
-/// instance. If you need mutability within your server, you'll need to
-/// implement internal mutability within the server. This is necessary because
-/// there could be multiple clients connected simultaneously.
-#[async_trait]
-trait ProtoServer: Send + Sync {
-    async fn handle_client(&self, socket: TcpStream) -> ServerResult<()>;
-}
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .target(Target::Stdout)
         .init();
     let args = Args::parse();
-    // This needs an Arc so we can pass 'static copies into each handler task
-    let server = args.get_server()?;
-    let listener = TcpListener::bind((args.host.as_str(), args.port)).await?;
-    info!("Listening on {}:{}", args.host, args.port);
 
-    loop {
-        let (socket, client) = listener.accept().await?;
-
-        info!("{} Connected", client);
-
-        let server = Arc::clone(&server);
-        tokio::spawn(async move {
-            match server.handle_client(socket).await {
-                // Ignore SocketClose because it's a normal error
-                Ok(()) | Err(ServerError::SocketClose) => {}
-                Err(error) => {
-                    error!("{} Error running server: {:?}", client, error);
-                }
-            }
-            info!("{} Disconnected", client);
-        });
-    }
+    let server = ProtoServer::new(args.problem)?;
+    server.run(&args.host, args.port).await?;
+    Ok(())
 }

@@ -1,7 +1,7 @@
 use crate::{
     error::ServerResult,
+    problems::TcpServer,
     util::{socket_read, socket_write},
-    ProtoServer,
 };
 use async_trait::async_trait;
 use tokio::net::TcpStream;
@@ -11,7 +11,7 @@ use tokio::net::TcpStream;
 pub struct EchoServer;
 
 #[async_trait]
-impl ProtoServer for EchoServer {
+impl TcpServer for EchoServer {
     async fn handle_client(&self, mut socket: TcpStream) -> ServerResult<()> {
         let mut buf = [0; 1024];
 

@@ -1,7 +1,7 @@
 use crate::{
     error::{ServerError, ServerResult},
+    problems::TcpServer,
     util::socket_write,
-    ProtoServer,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -103,7 +103,7 @@ impl ChatServer {
 }
 
 #[async_trait]
-impl ProtoServer for ChatServer {
+impl TcpServer for ChatServer {
     async fn handle_client(&self, socket: TcpStream) -> ServerResult<()> {
         // Split the stream into buffered reader+writer so we can do
         // line-delimited operations

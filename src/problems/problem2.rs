@@ -1,4 +1,4 @@
-use crate::{error::ServerResult, util::socket_write, ProtoServer};
+use crate::{error::ServerResult, problems::TcpServer, util::socket_write};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use log::{debug, info};
@@ -13,7 +13,7 @@ use tokio::{
 pub struct PriceTrackingServer;
 
 #[async_trait]
-impl ProtoServer for PriceTrackingServer {
+impl TcpServer for PriceTrackingServer {
     async fn handle_client(&self, mut socket: TcpStream) -> ServerResult<()> {
         let (reader, mut writer) = socket.split();
         let mut reader = BufReader::new(reader);
