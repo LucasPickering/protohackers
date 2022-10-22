@@ -5,10 +5,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Read a message from a socket, and log the message
 pub async fn socket_read(
-    mut socket: impl AsyncReadExt + Unpin,
+    mut reader: impl AsyncReadExt + Unpin,
     buffer: &mut [u8],
 ) -> ServerResult<&[u8]> {
-    let bytes_read = socket
+    let bytes_read = reader
         .read(buffer)
         .await
         .context("Error reading from socket")?;
@@ -23,11 +23,11 @@ pub async fn socket_read(
 
 /// Write a message to a socket, and log it
 pub async fn socket_write(
-    mut socket: impl AsyncWriteExt + Unpin,
+    mut writer: impl AsyncWriteExt + Unpin,
     bytes: &[u8],
 ) -> ServerResult<()> {
     debug!("=> {:?}", String::from_utf8_lossy(bytes));
-    Ok(socket
+    Ok(writer
         .write_all(bytes)
         .await
         .context("Error writing to socket")?)
