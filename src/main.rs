@@ -27,6 +27,8 @@ struct Args {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .format_module_path(false)
+        .format_target(false)
         .target(Target::Stdout)
         .init();
     let args = Args::parse();

@@ -3,13 +3,14 @@ mod problem1;
 mod problem2;
 mod problem3;
 mod problem4;
+mod problem5;
 
 use crate::{
     error::{ServerError, ServerResult},
     problems::{
         problem0::EchoServer, problem1::PrimeTestServer,
         problem2::PriceTrackingServer, problem3::ChatServer,
-        problem4::UnusualDatabaseServer,
+        problem4::UnusualDatabaseServer, problem5::MaliciousChatProxy,
     },
 };
 use anyhow::anyhow;
@@ -44,6 +45,7 @@ impl ProtoServer {
             2 => Ok(Self::Tcp(Arc::new(PriceTrackingServer))),
             3 => Ok(Self::Tcp(Arc::new(ChatServer::new()))),
             4 => Ok(Self::Udp(Arc::new(UnusualDatabaseServer::new()))),
+            5 => Ok(Self::Tcp(Arc::new(MaliciousChatProxy))),
             problem => Err(anyhow!("Unknown problem: {}", problem).into()),
         }
     }
