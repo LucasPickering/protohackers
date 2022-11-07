@@ -24,7 +24,9 @@ pub enum ServerError {
 impl From<io::Error> for ServerError {
     fn from(other: io::Error) -> Self {
         match other.kind() {
-            io::ErrorKind::UnexpectedEof => ServerError::SocketClose,
+            io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset => {
+                ServerError::SocketClose
+            }
             _ => ServerError::Io(other),
         }
     }
