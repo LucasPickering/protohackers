@@ -32,3 +32,21 @@ pub async fn socket_write(
         .await
         .context("Error writing to socket")?)
 }
+
+/// Extensions on the `Result` type. This is wildly unnecessary but it was fun
+/// to write.
+pub trait ResultExt<T> {
+    /// "Smush" a result together by extracting either the `Ok` or `Err` value,
+    /// whichever is present. Requires the `Ok` and `Err` variants to be of the
+    /// same generic type, i.e. a `Result<T, T>`.
+    fn smush(self) -> T;
+}
+
+impl<T> ResultExt<T> for Result<T, T> {
+    fn smush(self) -> T {
+        match self {
+            Ok(val) => val,
+            Err(val) => val,
+        }
+    }
+}

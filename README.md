@@ -4,4 +4,8 @@ My solutions for [Protohackers](https://protohackers.com/). All solutions are wr
 
 ## Deployment
 
-Deployed locally via Docker Compose.
+Just run it locally and port forward on the router.
+
+```
+cargo watch -x run -- <problem> --host 0.0.0.0 --port 9001
+```
